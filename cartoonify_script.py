@@ -16,6 +16,7 @@ import re
 source_path = r'C:\Users\harry\Desktop\Stickers\Potential_Stickers'
 # Replace with your downloads folder path
 download_path = r'C:\Users\harry\Downloads'
+cartoon_website ='https://www.imgonline.com.ua/eng/cartoon-picture.php'
 edge_intensity_max = 50
 edge_intensity_min = 10
 edge_intensity_increment = 10
@@ -30,33 +31,35 @@ prefs = {
 }
 options.add_experimental_option("prefs", prefs)
 
-
-def main():
-    global source_path
-    if not check_directory(source_path):
-        source_path = get_valid_directory()
-
-    # List all files in the source directory
-    files = os.listdir(source_path)
-
-    # Filter image files
-    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
-
-    print("Images to cartoonify from path '" + source_path + "'")
-    for image_file in image_files:
-        print(image_file)
-
+def setup_driver(website):
     print("Setting up Webdriver...")
     # Set up WebDriver (replace with the path to your WebDriver)
     driver = webdriver.Chrome()
 
     print("Opening Website...")
     # Open the website
-    driver.get('https://www.imgonline.com.ua/eng/cartoon-picture.php')
+    driver.get(website)
     print("Website successfully opened")
+    return driver
 
-    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+def get_images(directory):
+    global source_path
+    if not check_directory(directory):
+        source_path = get_valid_directory()
 
+    # List all files in the source directory
+    files = os.listdir(directory)
+
+    # Filter image files
+    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+    
+    print("Images to cartoonify from path '" + source_path + "'")
+    for image_file in image_files:
+        print(image_file)
+
+    return image_files
+
+def automation_loop(image_files, driver, wait):
     for image_file in image_files:
         folder_dst_name = os.path.splitext(image_file)[0]  # Extract file name without extension
         folder_dst_path = os.path.join(source_path, folder_dst_name)
@@ -83,7 +86,6 @@ def main():
     # Close the browser after saving all processed images
     print("Finished! Closing driver now...")
     driver.quit()
-    subprocess.Popen(f'explorer {source_path}')
 
 
 def move_downloaded_file(edge_intensity_value, folder_dst_path):
@@ -184,5 +186,12 @@ def check_directory(path):
 
     return True
 
+def main():
+    image_files = get_images(source_path)
+    driver = setup_driver(cartoon_website)
+    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+    automation_loop(image_files, driver, wait)
+
+    subprocess.Popen(f'explorer {source_path}')
 
 main()
