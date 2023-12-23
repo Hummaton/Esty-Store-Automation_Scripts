@@ -12,6 +12,7 @@ import subprocess
 import time
 import re
 import tkinter as tk
+import re
 import keyboard
 
 # Replace with your folder path containing your images
@@ -89,7 +90,6 @@ def automation_loop(image_files, driver, wait):
     print("Finished! Closing driver now...")
     driver.quit()
 
-
 def move_downloaded_file(edge_intensity_value, folder_dst_path):
     # Find the newest downloaded file in the downloads folder
     list_of_files = glob.glob(os.path.join(download_path, "*"))
@@ -105,7 +105,6 @@ def move_downloaded_file(edge_intensity_value, folder_dst_path):
         print("Downloaded file doesn't match the expected pattern or does not exist")
         exit(1)
 
-
 def assert_finished(wait, element):
     # Wait for the elements indicating the image processing is complete on the result page
     try:
@@ -120,7 +119,6 @@ def assert_finished(wait, element):
 
     print(f"Downloading image...")  # Print statement when the element is found
     download_button.click()
-
 
 def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
     try:
@@ -145,7 +143,6 @@ def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
         print("Upload input element not found!")  # Print message if the element is not found
         # Handle the case when the element is not found or perform additional actions
 
-
 def get_valid_directory():
     continue_request = input("Continue? Enter (Y/N): ").lower()
 
@@ -166,7 +163,6 @@ def get_valid_directory():
     else:
         print("Adios!")
         exit(0)
-
 
 def check_directory(path):
     if not os.path.exists(path):
@@ -207,42 +203,73 @@ def picture_picker(directory):
 
         if os.path.isdir(folder_path):
             subprocess.Popen(f'explorer {folder_path}')
-            input track_keyboard_input()
+            while True:
+                user_input = track_first_two_digits()
+                regex_pattern = r'EdgeIntensity_' + user_input
+                match, matching_filename = check_for_match(folder_path, regex_pattern)
+                if match:
+                    keep(matching_filename, folder_path)
+                    break
+                else:
+                    print("No match found")
+                    continue
 
+def keep(filename, folder_path):
+    for file in os.listdir(folder_path):
+        if file != filename:
+            os.remove(os.path.join(folder_path, file))
+            print("Removed " + file)
+    print("\n")
 
-def track_keyboard_input():
-    input_digits = ""
+def check_for_match(folder_path, pattern):   
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".jpg"):
+            match = re.search(pattern, filename)
+            if match:
+                print("Match found. Keeping " + filename)
+                return True, filename
+    return False, None          
+
+def track_first_two_digits():
+    digits = ""
+    while len(digits) < 2:
+        event = keyboard.read_event()
+        if event.event_type == keyboard.KEY_DOWN:
+            char = event.name
+            if char.isdigit():
+                digits += char
+            elif char == 'backspace':
+                print("input reset")
+                digits = ""  # Reset digits variable
+            elif char == 'esc':
+                print("Exiting...")
+                exit(0)
+    return digits
+
+def move_to_current_directory(directory):
+    # Iterate through each item in the provided directory
+    for item in os.listdir(directory):
+        item_path = os.path.join(directory, item)
+
+        if os.path.isdir(item_path):
+            # Iterate through each item in the subdirectory
+            for sub_item in os.listdir(item_path):
+                sub_item_path = os.path.join(item_path, sub_item)
+
+                # Form the new path for moving the sub-item
+                new_sub_item_path = os.path.join(directory, sub_item)
+                # Move the sub-item to the directory one level below
+                shutil.move(sub_item_path, new_sub_item_path)
+    print("Moved all files to current directory")
     
-    def on_key_press(event):
-        nonlocal input_digits
-        if event.event_type == 'down' and event.name.isdigit():
-            input_digits = input_digits + event.name
-            if len(input_digits) >= 2:
-                # Stop listening for keyboard events after capturing 2 digits
-                keyboard.unhook_all()
-        if event.event_type == 'down' and event.name == 'esc':
-            # Stop listening for keyboard events if the user presses the escape key
-            keyboard.unhook_all()
-            print("Exiting...")
-            exit(1)
-        if event.event_type == 'down' and event.name == 'backspace':
-            # Reset the last digit if the user presses the backspace key
-            input_digits = input_digits[:-1]   
-    
-    # Start listening for keyboard events
-    keyboard.on_press(on_key_press)
-    
-    # Wait for the user to enter 2 digits
-    keyboard.wait()
-    
-    return input_digits
 
-# Usage example
-input_digits = track_keyboard_input()
-print("Input digits:", input_digits)
-
-
-
+def remove_empty_folders(directory):
+    for folder in os.listdir(directory):
+        folder_path = os.path.join(directory, folder)
+        if os.path.isdir(folder_path):
+            if not os.listdir(folder_path):
+                os.rmdir(folder_path)
+    print("Removed empty folders")
 
 
 def main():
@@ -250,10 +277,12 @@ def main():
     # driver = setup_driver(cartoon_website)
     # wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
     # automation_loop(image_files, driver, wait)
-    # open_popup_windows("When each folder opens on screen, please type the edge intensity value you want to keep for that folder.\n" +
-    #                     "If you want to keep the image with Edge Intensity with 20, simply type '20' on your keyboard and it will move onto the next folder" +
-    #                     ".... Understood?")
+    open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
+                        "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
+                         "\n.... Understood?")
     picture_picker(source_path)
+    move_to_current_directory(source_path)
+    remove_empty_folders(source_path)
     
 
 
