@@ -78,7 +78,6 @@ def unzip_folder():
     else:
         print(f"'{zip_filename}' not found in the specified directory.")
 
-
 def run_application(application_path):
     if os.path.exists(application_path):
         webbrowser.open(application_path)
@@ -120,8 +119,6 @@ def enter_parameters():
     pyautogui.typewrite('100')  # Enter "100" into the input Res line
 
     pyautogui.click(1458, 384)  # Click on the select button
-
-
     
 def select_images(potential_stickers_path):
     time.sleep(2)  # Wait for the file explorer tab to open
@@ -157,14 +154,11 @@ def get_directory_size(directory):
             total += os.path.getsize(fp)
     return total
 
-
 def remove_images(old_images):
     for filename in old_images:
             os.remove(os.path.join(potential_stickers_path, filename))
             print(f"Removed previous file: {filename}")
     
-
-
 def main():
     move_zip_to_directory()
     unzip_folder()
@@ -179,7 +173,5 @@ def main():
     print("Size of old directory:", size_of_directory/1000000, "MB")
     print("Size of new directory:", get_directory_size(potential_stickers_path)/1000000, "MB")
     subprocess.Popen(f'explorer {potential_stickers_path}')
-
-    
 
 main()

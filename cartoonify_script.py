@@ -262,7 +262,6 @@ def move_to_current_directory(directory):
                 shutil.move(sub_item_path, new_sub_item_path)
     print("Moved all files to current directory")
     
-
 def remove_empty_folders(directory):
     for folder in os.listdir(directory):
         folder_path = os.path.join(directory, folder)
@@ -271,19 +270,18 @@ def remove_empty_folders(directory):
                 os.rmdir(folder_path)
     print("Removed empty folders")
 
-
 def main():
-    # image_files = get_images(source_path)
-    # driver = setup_driver(cartoon_website)
-    # wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-    # automation_loop(image_files, driver, wait)
+    image_files = get_images(source_path)
+    driver = setup_driver(cartoon_website)
+    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+    automation_loop(image_files, driver, wait)
     open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
                         "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
                          "\n.... Understood?")
     picture_picker(source_path)
     move_to_current_directory(source_path)
     remove_empty_folders(source_path)
-    
-
+    print("Finished!")
+    subprocess.Popen(f'explorer {source_path}')
 
 main()
