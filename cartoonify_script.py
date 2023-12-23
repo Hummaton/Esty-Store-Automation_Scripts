@@ -11,15 +11,17 @@ import os
 import subprocess
 import time
 import re
+import tkinter as tk
+import keyboard
 
 # Replace with your folder path containing your images
 source_path = r'C:\Users\harry\Desktop\Stickers\Potential_Stickers'
 # Replace with your downloads folder path
 download_path = r'C:\Users\harry\Downloads'
 cartoon_website ='https://www.imgonline.com.ua/eng/cartoon-picture.php'
-edge_intensity_max = 50
+edge_intensity_max = 100
 edge_intensity_min = 10
-edge_intensity_increment = 10
+edge_intensity_increment = 5
 
 # Set up browser options for download preferences
 options = webdriver.ChromeOptions()
@@ -186,12 +188,73 @@ def check_directory(path):
 
     return True
 
-def main():
-    image_files = get_images(source_path)
-    driver = setup_driver(cartoon_website)
-    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-    automation_loop(image_files, driver, wait)
+def open_popup_windows(popup_text):
+    # Open a popup window to display instructions
+    root = tk.Tk()
+    root.title("Instructions")
+    root.geometry("400x200")
+    root.resizable(False, False)
+    root.configure(background="white")
 
-    subprocess.Popen(f'explorer {source_path}')
+    label = tk.Label(root, text=popup_text)
+    label.pack()
+
+    root.mainloop()
+
+def picture_picker(directory):
+    for folder in os.listdir(directory):
+        folder_path = os.path.join(directory, folder)
+
+        if os.path.isdir(folder_path):
+            subprocess.Popen(f'explorer {folder_path}')
+            input track_keyboard_input()
+
+
+def track_keyboard_input():
+    input_digits = ""
+    
+    def on_key_press(event):
+        nonlocal input_digits
+        if event.event_type == 'down' and event.name.isdigit():
+            input_digits = input_digits + event.name
+            if len(input_digits) >= 2:
+                # Stop listening for keyboard events after capturing 2 digits
+                keyboard.unhook_all()
+        if event.event_type == 'down' and event.name == 'esc':
+            # Stop listening for keyboard events if the user presses the escape key
+            keyboard.unhook_all()
+            print("Exiting...")
+            exit(1)
+        if event.event_type == 'down' and event.name == 'backspace':
+            # Reset the last digit if the user presses the backspace key
+            input_digits = input_digits[:-1]   
+    
+    # Start listening for keyboard events
+    keyboard.on_press(on_key_press)
+    
+    # Wait for the user to enter 2 digits
+    keyboard.wait()
+    
+    return input_digits
+
+# Usage example
+input_digits = track_keyboard_input()
+print("Input digits:", input_digits)
+
+
+
+
+
+def main():
+    # image_files = get_images(source_path)
+    # driver = setup_driver(cartoon_website)
+    # wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+    # automation_loop(image_files, driver, wait)
+    # open_popup_windows("When each folder opens on screen, please type the edge intensity value you want to keep for that folder.\n" +
+    #                     "If you want to keep the image with Edge Intensity with 20, simply type '20' on your keyboard and it will move onto the next folder" +
+    #                     ".... Understood?")
+    picture_picker(source_path)
+    
+
 
 main()
