@@ -22,7 +22,7 @@ source_path = r'C:\Users\harry\Desktop\Stickers\Potential_Stickers'
 # Replace with your downloads folder path
 download_path = r'C:\Users\harry\Downloads'
 cartoon_website ='https://www.imgonline.com.ua/eng/cartoon-picture.php'
-edge_intensity_max = 90
+edge_intensity_max = 60
 edge_intensity_min = 10
 edge_intensity_increment = 10
 zip_filename = 'potential stickers.zip'
@@ -73,6 +73,8 @@ def convert_images_to_jpg(directory):
             continue
         try:
             img = Image.open(file_path)
+            if img.mode == "RGBA":
+                img = img.convert("RGB")  # Convert RGBA to RGB
             jpg_filename = os.path.splitext(filename)[0] + ".jpg"
             img.save(os.path.join(directory, jpg_filename))
             print(f"Converted {filename} to {jpg_filename}")
@@ -134,9 +136,9 @@ def automation_loop(image_files, driver, wait):
             #print("Waiting for webpage to load...")
             time.sleep(5)
             assert_finished(wait, "Download processed image")
-            driver.get('https://www.imgonline.com.ua/eng/cartoon-picture.php')
+            driver.get(cartoon_website)
             time.sleep(8)
-        move_downloaded_file(edge_intensity_value, folder_dst_path)
+            move_downloaded_file(edge_intensity_value, folder_dst_path)
 
     # Close the browser after saving all processed images
     print("Finished! Closing driver now...")
@@ -332,12 +334,13 @@ def remove_empty_folders(directory):
 def main():
     move_zip_to_directory()
     unzip_folder()
-    convert_images_to_jpg(source_path)
+    #convert_images_to_jpg(source_path)
     image_files = get_images(source_path)
     driver = setup_driver(cartoon_website)
     wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
     automation_loop(image_files, driver, wait)
     os.startfile(r'C:\Users\harry\Desktop\Stickers\Scripts\Oven-Timer-Ding.mp3')      
+
     open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
                         "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
                          "\n.... Understood?")
