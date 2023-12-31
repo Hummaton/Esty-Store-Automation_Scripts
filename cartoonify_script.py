@@ -334,20 +334,20 @@ def remove_empty_folders(directory):
 def main():
     move_zip_to_directory()
     unzip_folder()
-    #convert_images_to_jpg(source_path)
-    image_files = get_images(source_path)
-    driver = setup_driver(cartoon_website)
-    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-    automation_loop(image_files, driver, wait)
-    os.startfile(r'C:\Users\harry\Desktop\Stickers\Scripts\Oven-Timer-Ding.mp3')      
+    if (get_valid_directory(source_path)):
+        image_files = get_images(source_path)
+        driver = setup_driver(cartoon_website)
+        wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+        automation_loop(image_files, driver, wait)
+        os.startfile(r'C:\Users\harry\Desktop\Stickers\Scripts\Oven-Timer-Ding.mp3')      
 
-    open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
-                        "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
-                         "\n.... Understood?")
-    picture_picker(source_path)
-    move_to_current_directory(source_path)
-    remove_empty_folders(source_path)
-    print("Finished!")
-    subprocess.Popen(f'explorer {source_path}')
+        open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
+                            "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
+                            "\n.... Understood?")
+        picture_picker(source_path)
+        move_to_current_directory(source_path)
+        remove_empty_folders(source_path)
+        print("Finished!")
+        subprocess.Popen(f'explorer {source_path}')
 
 main()
