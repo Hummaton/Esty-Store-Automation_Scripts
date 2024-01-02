@@ -19,7 +19,7 @@ import zipfile
 import keyboard
 import threading
 
-edge_intensity_max = 60
+edge_intensity_max = 70
 edge_intensity_min = 10
 edge_intensity_increment = 10
 
@@ -45,45 +45,7 @@ def move_zip_to_directory():
     else:
         print(f"'{zip_filename}' not found in Downloads directory.")
         return False
-
-def move_to_current_directory():
-    # Move picture files from each folder to the current directory
-    for folder in os.listdir():
-        folder_path = os.path.join(os.getcwd(), folder)
-        if os.path.isdir(folder_path) and os.access(folder_path, os.R_OK):
-            for item in os.listdir(folder_path):
-                item_path = os.path.join(folder_path, item)
-                if os.path.isfile(item_path):
-                    ext = os.path.splitext(item_path)[1].lower()
-                    if ext in picture_extensions:
-                        dest = item_path
-                        if os.path.exists(dest):
-                            filename, file_extension = os.path.splitext(item_path)
-                            dest = f"{filename}_renamed{file_extension}"
-                        shutil.move(item_path, dest)
-                        print(f"Moved '{item_path}' from '{folder}' to '{dest}' in the current directory.")
-                        return True
-                    
-def convert_images_to_jpg(directory):
-    image_files = []  # Create an empty list to store the image filenames
-    for filename in os.listdir(directory):
-        if filename.endswith(".jpg"):
-            image_files.append(filename)
-            continue
-        try:
-            img = Image.open(os.path.join(directory, filename))
-            jpg_filename = os.path.splitext(filename)[0] + ".jpg"
-            img.save(os.path.join(directory, jpg_filename))
-            print(f"Converted {filename} to {jpg_filename}")
-            os.remove(os.path.join(directory, filename))  # Remove the old file
-            image_files.append(jpg_filename)  # Append the converted image filename to the list
-        except Exception as e:
-            print(f"Error converting {filename}: {e}")
-            webbrowser.open("https://cloudconvert.com/image-converter")
-            exit(1)
-    print("All images converted to jpg successfully.")
-    return image_files  # Return the list of image filenames
-
+                
 def unzip_folder():
     zip_file_path = os.path.join(potential_stickers_path, zip_filename)
 
@@ -95,6 +57,54 @@ def unzip_folder():
         print(f"Removed '{zip_filename}'")
     else:
         print(f"'{zip_filename}' not found in the specified directory.")
+
+def get_valid_directory():
+    continue_request = input("Continue? Enter (Y/N): ").lower()
+
+    if continue_request == "y":
+        print("Please select the folder containing your pictures")
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        new_path = filedialog.askdirectory()
+        if new_path:  # If a directory is selected
+            if validate_directory(new_path):
+                return new_path
+            else:
+                print("Invalid directory!")
+                return get_valid_directory()
+        else:
+            print("No directory selected!")
+            return get_valid_directory()
+    else:
+        print("Adios!")
+        exit(0)
+
+def validate_directory(path):
+    if not os.path.exists(path):
+        print("The directory path does not exist.")
+        return False
+
+    if not os.path.isdir(path):
+        print("The provided path is not a directory.")
+        return False
+
+    # Get all files in the directory
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+
+    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.PNG', '.gif'))]
+
+    if not image_files:
+        print("The directory does not contain any image files.")
+        return False
+
+    return True
+
+def rename_images(directory):
+    index = 0 
+    for image in os.listdir(directory):
+        index += 1
+        if image.endswith(".jpg"):
+            os.rename(os.path.join(directory, image), os.path.join(directory, "image_" + str(index) + ".jpg"))
 
 def run_application(application_path):
     if os.path.exists(application_path):
@@ -149,8 +159,6 @@ def select_images(potential_stickers_path):
     time.sleep(5)  # Wait for the images to load
     pyautogui.click(1750, 963)  # Click on upscale button
 
-# ...
-
 def check_progress(ammount_of_images):
     wait_time = 0
     print("waiting for processing to complete...")
@@ -159,6 +167,7 @@ def check_progress(ammount_of_images):
         images_enhanced = len(os.listdir(enhancedImages_path))
         wait_time += 3
         if ammount_of_images != len(os.listdir(potential_stickers_path)):
+
             move_newest_image(potential_stickers_path, enhancedImages_path)
             images_enhanced = len(os.listdir(enhancedImages_path))
             images_remaining = ammount_of_images - images_enhanced
@@ -168,10 +177,24 @@ def check_progress(ammount_of_images):
             # Retrieve the newest file from enhancedImages_path
             files = [os.path.join(enhancedImages_path, f) for f in os.listdir(enhancedImages_path) if os.path.isfile(os.path.join(enhancedImages_path, f))]
             newest_file = max(files, key=os.path.getmtime, default=None)
-            # print("Newest file:", newest_file)
-        
+
             # Run cartoonify_image in the background
-            threading.Thread(target=cartoonify_image, args=(newest_file,)).start()
+            # Extracting the filename without extension
+            folder_dst_name = os.path.splitext(os.path.basename(newest_file))[0]
+            folder_dst_path = os.path.join(cartoonified_images_path, folder_dst_name)
+            os.makedirs(folder_dst_path, exist_ok=True)
+            # print("\nCreated folder to store " + newest_file + " and cartoonified versions into " + folder_dst_name + "with path " + folder_dst_path)
+
+            # Copying the file to the newly created folder
+            shutil.copy(newest_file, folder_dst_path)
+            print("Copied " + newest_file + " to " + folder_dst_path)
+            print("Beginning cartoonization for " + newest_file)
+            for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
+                inner_folder_name = f"EdgeIntensity_{edge_intensity_value}" + folder_dst_name
+                inner_folder_path = os.path.join(folder_dst_path, inner_folder_name)
+                os.makedirs(inner_folder_path, exist_ok=True)
+                threading.Thread(target=cartoonify_image, args=(newest_file, inner_folder_path, edge_intensity_value, int(edge_intensity_value/5))).start()
+                time.sleep(1)
 
         if ammount_of_images == images_enhanced:
             print("Enhancement complete! Total wait time was", wait_time, "seconds")
@@ -179,72 +202,44 @@ def check_progress(ammount_of_images):
         
         time.sleep(3)  # Check directory size every 3 seconds
 
-
 def move_newest_image(source_folder, destination_folder):
     files = [os.path.join(source_folder, f) for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
     newest_image = max(files, key=os.path.getmtime, default=None)
     shutil.move(newest_image, destination_folder)
     print(f"Moved {newest_image} to {destination_folder}")
    
-
 def check_threads_done():
     while threading.active_count() > 1:
         pass
     print("All processes are done running")
      
-
-def cartoonify_image(image):
-
-    # Extracting the filename without extension
-    folder_dst_name = os.path.splitext(os.path.basename(image))[0]
-
-    # Creating a folder with the file name in the destination directory
-    folder_dst_path = os.path.join(cartoonified_images_path, folder_dst_name)
-    os.makedirs(folder_dst_path, exist_ok=True)
-    print("\nCreated folder to store " + image + " and cartoonified versions into " + folder_dst_name + "with path " + folder_dst_path)
-
-    # Copying the file to the newly created folder
-    shutil.copy(image, folder_dst_path)
-    print("Copied " + image + " to " + folder_dst_path)
-    
+def cartoonify_image(image, folder_dst_path, edge_intensity_value,variable_wait_time):
     download_directory = folder_dst_path
     website = cartoon_website
 
     driver = setup_driver(download_directory, website)
-
     wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-
-
-    print("Beginning cartoonization for " + folder_dst_name)
-
-    for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
-        send_cartoonify(driver, edge_intensity_value, image, folder_dst_path)
-        #print("Waiting for webpage to load...")
-        time.sleep(5)
-        assert_finished(wait, "Download processed image")
-        driver.get(cartoon_website)
-        time.sleep(8)
-        rename_downloaded_file(edge_intensity_value, folder_dst_path)
+    time.sleep(variable_wait_time)
+    send_cartoonify(driver, edge_intensity_value, image, folder_dst_path)
+    #print("Waiting for webpage to load...")
+    time.sleep(5)
+    assert_finished(wait, "Download processed image")
+    driver.get(cartoon_website)
+    time.sleep(8)
+    rename_downloaded_file(edge_intensity_value, folder_dst_path)
 
     # Close the browser after cartoonifying the image
-    print("Finished cartoonifying ", folder_dst_name)
+    print("Finished cartoonifying ", image)
     driver.quit() 
+
 
 
 def setup_driver(download_directory, website):
     chrome_options = webdriver.ChromeOptions()
     prefs = {'download.default_directory': download_directory}
     chrome_options.add_experimental_option('prefs', prefs)
-
-    print("Setting up Webdriver...")
-    # Set up WebDriver (replace with the path to your WebDriver)
-    driver = webdriver.Chrome()
-
-    print("Opening Website...")
-    # Open the website
     driver = webdriver.Chrome(options=chrome_options)
     driver.get(website)
-    print("Website successfully opened")
     return driver           
 
 def get_images(directory):
@@ -264,7 +259,6 @@ def get_images(directory):
 
     return image_files
 
-
 def get_directory_size(directory):
     total = 0
     for path, dirs, files in os.walk(directory):
@@ -272,7 +266,6 @@ def get_directory_size(directory):
             fp = os.path.join(path, f)
             total += os.path.getsize(fp)
     return total
-
 
 def rename_downloaded_file(edge_intensity_value, folder_dst_path):
     try:
@@ -334,47 +327,6 @@ def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
         print("Upload input element not found!")  # Print message if the element is not found
         # Handle the case when the element is not found or perform additional actions
 
-def get_valid_directory():
-    continue_request = input("Continue? Enter (Y/N): ").lower()
-
-    if continue_request == "y":
-        print("Please select the folder containing your pictures")
-        root = tk.Tk()
-        root.withdraw()  # Hide the main window
-        new_path = filedialog.askdirectory()
-        if new_path:  # If a directory is selected
-            if validate_directory(new_path):
-                return new_path
-            else:
-                print("Invalid directory!")
-                return get_valid_directory()
-        else:
-            print("No directory selected!")
-            return get_valid_directory()
-    else:
-        print("Adios!")
-        exit(0)
-
-def validate_directory(path):
-    if not os.path.exists(path):
-        print("The directory path does not exist.")
-        return False
-
-    if not os.path.isdir(path):
-        print("The provided path is not a directory.")
-        return False
-
-    # Get all files in the directory
-    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
-
-    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
-
-    if not image_files:
-        print("The directory does not contain any image files.")
-        return False
-
-    return True
-
 def open_popup_windows(popup_text):
     # Open a popup window to display instructions
     root = tk.Tk()
@@ -404,6 +356,24 @@ def picture_picker(directory):
                 else:
                     print("No match found")
                     continue
+
+def move_to_current_directory():
+    # Move picture files from each folder to the current directory
+    for folder in os.listdir():
+        folder_path = os.path.join(os.getcwd(), folder)
+        if os.path.isdir(folder_path) and os.access(folder_path, os.R_OK):
+            for item in os.listdir(folder_path):
+                item_path = os.path.join(folder_path, item)
+                if os.path.isfile(item_path):
+                    ext = os.path.splitext(item_path)[1].lower()
+                    if ext in picture_extensions:
+                        dest = item_path
+                        if os.path.exists(dest):
+                            filename, file_extension = os.path.splitext(item_path)
+                            dest = f"{filename}_renamed{file_extension}"
+                        shutil.move(item_path, dest)
+                        print(f"Moved '{item_path}' from '{folder}' to '{dest}' in the current directory.")
+                        return True
 
 def keep(filename, folder_path):
     for file in os.listdir(folder_path):
@@ -461,12 +431,6 @@ def remove_empty_folders(directory):
                 os.rmdir(folder_path)
     print("Removed empty folders")
 
-def rename_images(directory):
-    index = 0 
-    for image in os.listdir(directory):
-        index += 1
-        if image.endswith(".jpg"):
-            os.rename(os.path.join(directory, image), os.path.join(directory, "image_" + str(index) + ".jpg"))
 
 def main():
     move_zip_to_directory()
@@ -480,6 +444,10 @@ def main():
     select_images(potential_stickers_path)
     check_progress(ammount_of_images)
     check_threads_done()
+    for folder in os.listdir(cartoonified_images_path):        
+        folder_path = os.path.join(cartoonified_images_path, folder)
+        move_to_current_directory(folder_path)
+        remove_empty_folders(folder_path)
     os.startfile(audio_path)      
     open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
                         "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
