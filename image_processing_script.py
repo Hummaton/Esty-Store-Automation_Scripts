@@ -167,11 +167,10 @@ def check_progress(ammount_of_images):
         images_enhanced = len(os.listdir(enhancedImages_path))
         wait_time += 3
         if ammount_of_images != len(os.listdir(potential_stickers_path)):
-
             move_newest_image(potential_stickers_path, enhancedImages_path)
             images_enhanced = len(os.listdir(enhancedImages_path))
             images_remaining = ammount_of_images - images_enhanced
-            print("Processed", images_enhanced, "images so far... \n" 
+            print("Enhanced", images_enhanced, "images so far... \n" 
                   + str(images_remaining) + " images remaining")
             
             # Retrieve the newest file from enhancedImages_path
@@ -189,11 +188,13 @@ def check_progress(ammount_of_images):
             shutil.copy(newest_file, folder_dst_path)
             print("Copied " + newest_file + " to " + folder_dst_path)
             print("Beginning cartoonization for " + newest_file)
+            wait_index = 0
             for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
                 inner_folder_name = f"EdgeIntensity_{edge_intensity_value}" + folder_dst_name
                 inner_folder_path = os.path.join(folder_dst_path, inner_folder_name)
                 os.makedirs(inner_folder_path, exist_ok=True)
-                threading.Thread(target=cartoonify_image, args=(newest_file, inner_folder_path, edge_intensity_value, int(edge_intensity_value/5))).start()
+                wait_index += 4
+                threading.Thread(target=cartoonify_image, args=(newest_file, inner_folder_path, edge_intensity_value, wait_index)).start()
                 time.sleep(1)
 
         if ammount_of_images == images_enhanced:
@@ -231,8 +232,6 @@ def cartoonify_image(image, folder_dst_path, edge_intensity_value,variable_wait_
     # Close the browser after cartoonifying the image
     print("Finished cartoonifying ", image)
     driver.quit() 
-
-
 
 def setup_driver(download_directory, website):
     chrome_options = webdriver.ChromeOptions()
@@ -431,8 +430,28 @@ def remove_empty_folders(directory):
                 os.rmdir(folder_path)
     print("Removed empty folders")
 
+def validate_empty_directory(directory):
+    if os.listdir(directory):
+        print("Working directory " + directory + " is not empty. Would you like to empty it? (Y/N)")
+        user_input = input().lower()
+        if user_input == "y":
+            for file in os.listdir(directory):
+                file_path = os.path.join(directory, file)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            print("Directory emptied")
+        elif user_input == "n":
+            print("Exiting...")
+            subprocess.Popen(['explorer', directory])
+            exit(0)
+        else:
+            print("Invalid input")
+            validate_empty_directory(directory)
+
 
 def main():
+    validate_empty_directory(cartoonified_images_path)
+    validate_empty_directory(enhancedImages_path)
     move_zip_to_directory()
     unzip_folder()
     if not validate_directory(potential_stickers_path):
@@ -448,7 +467,7 @@ def main():
         folder_path = os.path.join(cartoonified_images_path, folder)
         move_to_current_directory(folder_path)
         remove_empty_folders(folder_path)
-    os.startfile(audio_path)      
+    subprocess.Popen(['start', audio_path], shell=True)    
     open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
                         "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
                          "\n.... Understood?")
@@ -457,6 +476,7 @@ def main():
     remove_empty_folders(cartoonified_images_path)
     print("Finished!")
     subprocess.Popen(f'explorer {cartoonified_images_path}')
+    
 
 
 main()
