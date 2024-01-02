@@ -17,6 +17,7 @@ import pygetwindow as gw
 import re
 import zipfile
 import keyboard
+import threading
 
 edge_intensity_max = 60
 edge_intensity_min = 10
@@ -24,23 +25,14 @@ edge_intensity_increment = 10
 
 picture_extensions = (".jpg", ".jpeg", ".png", "avif")
 downloads_path = r'C:\Users\harry\Downloads'  # Update with your Downloads directory path
-potential_stickers_path = r'C:\Users\harry\Desktop\Stickers\Potential_Stickers'  # Update with the destination directory path
+potential_stickers_path = r'C:\Users\harry\Desktop\Stickers\processing_directory\Potential_Stickers'  # Update with the destination directory path
+enhancedImages_path = r'C:\Users\harry\Desktop\Stickers\processing_directory\Enhanced_Images'  # Update with the destination directory path
+cartoonified_images_path = r'C:\Users\harry\Desktop\Stickers\processing_directory\Cartoonified_Images'  # Update with the destination directory path
 zip_filename = 'potential stickers.zip'
 quality_scaler_path = r'C:\Users\harry\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Steam\QualityScaler.url'  # Update with the path to your Quality Scaler application
 audio_path = r'C:\Users\harry\Desktop\Stickers\Scripts\Oven-Timer-Ding.mp3' # Update with the path to your audio file
 cartoon_website ='https://www.imgonline.com.ua/eng/cartoon-picture.php'
 zip_filename = 'potential stickers.zip'
-
-# Set up browser options for download preferences
-options = webdriver.ChromeOptions()
-prefs = {
-    "download.default_directory": downloads_path,
-    "download.prompt_for_download": False,  # Disable prompt for download
-    "download.directory_upgrade": True,
-    "safebrowsing.enabled": True
-}
-options.add_experimental_option("prefs", prefs)
-
 
 def move_zip_to_directory():
     source_zip_path = os.path.join(downloads_path, zip_filename)
@@ -157,44 +149,103 @@ def select_images(potential_stickers_path):
     time.sleep(5)  # Wait for the images to load
     pyautogui.click(1750, 963)  # Click on upscale button
 
+# ...
+
 def check_progress(ammount_of_images):
     wait_time = 0
     print("waiting for processing to complete...")
 
     while True:
-        current_ammount_of_images = len(os.listdir(potential_stickers_path))
+        images_enhanced = len(os.listdir(enhancedImages_path))
         wait_time += 3
-        if current_ammount_of_images >= 2 * ammount_of_images:
-            print("Processing complete! Total wait time was", wait_time, "seconds")
+        if ammount_of_images != len(os.listdir(potential_stickers_path)):
+            move_newest_image(potential_stickers_path, enhancedImages_path)
+            images_enhanced = len(os.listdir(enhancedImages_path))
+            images_remaining = ammount_of_images - images_enhanced
+            print("Processed", images_enhanced, "images so far... \n" 
+                  + str(images_remaining) + " images remaining")
+            
+            # Retrieve the newest file from enhancedImages_path
+            files = [os.path.join(enhancedImages_path, f) for f in os.listdir(enhancedImages_path) if os.path.isfile(os.path.join(enhancedImages_path, f))]
+            newest_file = max(files, key=os.path.getmtime, default=None)
+            # print("Newest file:", newest_file)
+        
+            # Run cartoonify_image in the background
+            threading.Thread(target=cartoonify_image, args=(newest_file,)).start()
+
+        if ammount_of_images == images_enhanced:
+            print("Enhancement complete! Total wait time was", wait_time, "seconds")
             break
+        
         time.sleep(3)  # Check directory size every 3 seconds
-        if current_ammount_of_images != len(os.listdir(potential_stickers_path)):
-            print("Processed", len(os.listdir(potential_stickers_path)) - ammount_of_images,
-             "images so far...")
 
-def get_directory_size(directory):
-    total = 0
-    for path, dirs, files in os.walk(directory):
-        for f in files:
-            fp = os.path.join(path, f)
-            total += os.path.getsize(fp)
-    return total
 
-def remove_images(old_images):
-    for filename in old_images:
-            os.remove(os.path.join(potential_stickers_path, filename))
-            print(f"Removed previous file: {filename}")
+def move_newest_image(source_folder, destination_folder):
+    files = [os.path.join(source_folder, f) for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
+    newest_image = max(files, key=os.path.getmtime, default=None)
+    shutil.move(newest_image, destination_folder)
+    print(f"Moved {newest_image} to {destination_folder}")
+   
 
-def setup_driver(website):
+def check_threads_done():
+    while threading.active_count() > 1:
+        pass
+    print("All processes are done running")
+     
+
+def cartoonify_image(image):
+
+    # Extracting the filename without extension
+    folder_dst_name = os.path.splitext(os.path.basename(image))[0]
+
+    # Creating a folder with the file name in the destination directory
+    folder_dst_path = os.path.join(cartoonified_images_path, folder_dst_name)
+    os.makedirs(folder_dst_path, exist_ok=True)
+    print("\nCreated folder to store " + image + " and cartoonified versions into " + folder_dst_name + "with path " + folder_dst_path)
+
+    # Copying the file to the newly created folder
+    shutil.copy(image, folder_dst_path)
+    print("Copied " + image + " to " + folder_dst_path)
+    
+    download_directory = folder_dst_path
+    website = cartoon_website
+
+    driver = setup_driver(download_directory, website)
+
+    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+
+
+    print("Beginning cartoonization for " + folder_dst_name)
+
+    for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
+        send_cartoonify(driver, edge_intensity_value, image, folder_dst_path)
+        #print("Waiting for webpage to load...")
+        time.sleep(5)
+        assert_finished(wait, "Download processed image")
+        driver.get(cartoon_website)
+        time.sleep(8)
+        rename_downloaded_file(edge_intensity_value, folder_dst_path)
+
+    # Close the browser after cartoonifying the image
+    print("Finished cartoonifying ", folder_dst_name)
+    driver.quit() 
+
+
+def setup_driver(download_directory, website):
+    chrome_options = webdriver.ChromeOptions()
+    prefs = {'download.default_directory': download_directory}
+    chrome_options.add_experimental_option('prefs', prefs)
+
     print("Setting up Webdriver...")
     # Set up WebDriver (replace with the path to your WebDriver)
     driver = webdriver.Chrome()
 
     print("Opening Website...")
     # Open the website
+    driver = webdriver.Chrome(options=chrome_options)
     driver.get(website)
     print("Website successfully opened")
-    return driver
+    return driver           
 
 def get_images(directory):
     global potential_stickers_path
@@ -213,39 +264,20 @@ def get_images(directory):
 
     return image_files
 
-def automation_loop(image_files, driver, wait):
-    for image_file in image_files:
-        folder_dst_name = os.path.splitext(image_file)[0]  # Extract file name without extension
-        folder_dst_path = os.path.join(potential_stickers_path, folder_dst_name)
 
-        # Create folder if it doesn't exist
-        os.makedirs(folder_dst_path, exist_ok=True)
-        #print("\nCreated folder to store " + image_file + " and cartoonified versions")
+def get_directory_size(directory):
+    total = 0
+    for path, dirs, files in os.walk(directory):
+        for f in files:
+            fp = os.path.join(path, f)
+            total += os.path.getsize(fp)
+    return total
 
-        # Move image file to its respective folder
-        src = os.path.join(potential_stickers_path, image_file)
-        dst = os.path.join(folder_dst_path, image_file)
-        shutil.move(src, dst)
-        # print("Moving image to new folder and beginning cartoonization...")
 
-        print("Beginning cartoonization for " + image_file)
-        for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
-            send_cartoonify(driver, edge_intensity_value, image_file, folder_dst_path)
-            #print("Waiting for webpage to load...")
-            time.sleep(5)
-            assert_finished(wait, "Download processed image")
-            driver.get(cartoon_website)
-            time.sleep(8)
-            move_downloaded_file(edge_intensity_value, folder_dst_path)
-
-    # Close the browser after saving all processed images
-    print("Finished! Closing driver now...")
-    driver.quit()
-
-def move_downloaded_file(edge_intensity_value, folder_dst_path):
+def rename_downloaded_file(edge_intensity_value, folder_dst_path):
     try:
         # Find the newest downloaded file in the downloads folder
-        list_of_files = glob.glob(os.path.join(downloads_path, "*"))
+        list_of_files = glob.glob(os.path.join(folder_dst_path, "*"))
         latest_file = max(list_of_files, key=os.path.getctime)
         # Check if the latest downloaded file matches the regex pattern
         regex_pattern = r'imgonline-com-ua-CartoonPicture.*\.jpg'
@@ -256,18 +288,19 @@ def move_downloaded_file(edge_intensity_value, folder_dst_path):
             os.rename(latest_file, new_file_path)
         else:
             print("Downloaded file doesn't match the expected pattern or does not exist")
-            exit(1)
+            time.sleep(3)
+            print("Retrying...")
+            rename_downloaded_file(edge_intensity_value, folder_dst_path)
     except Exception as e:
         print(f"An error occurred: {e}")
         print("Retrying...")
-        time.sleep(5)
-        move_downloaded_file(edge_intensity_value, folder_dst_path)
-
+        time.sleep(1)
+        rename_downloaded_file(edge_intensity_value, folder_dst_path)
 
 def assert_finished(wait, element):
     # Wait for the elements indicating the image processing is complete on the result page
     try:
-        print("Locating download button...")
+        time.sleep(2)
         download_button = wait.until(EC.presence_of_element_located((By.XPATH, f'//a[b[text()="{element}"]]')))
     except TimeoutException as e:
         print(f"Timeout occurred: {e}")
@@ -276,7 +309,6 @@ def assert_finished(wait, element):
         print(f"An error occurred: {e}")
         exit(1)
 
-    print(f"Downloading image...")  # Print statement when the element is found
     download_button.click()
 
 def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
@@ -293,7 +325,7 @@ def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
         img_quality.clear()
         img_quality.send_keys('100')  # Set segmentation level to 7
 
-        print("Sending " + image_file + " with Edge Intensity " + str(edge_intensity_value))
+        #print("Sending " + image_file + " with Edge Intensity " + str(edge_intensity_value))
         # Submit the form or initiate processing (assuming a button click)
         submit_button = driver.find_element(By.XPATH, '//input[@type="submit"]')
         submit_button.click()
@@ -429,37 +461,36 @@ def remove_empty_folders(directory):
                 os.rmdir(folder_path)
     print("Removed empty folders")
 
-def main():
-    # move_zip_to_directory()
-    # unzip_folder()
-    # if not validate_directory(potential_stickers_path):
-    #     exit(1)
-    # old_images = convert_images_to_jpg(potential_stickers_path) 
-    # run_application(quality_scaler_path)
-    # enter_parameters()
-    # ammount_of_images = len(os.listdir(potential_stickers_path)) 
-    # size_of_directory = get_directory_size(potential_stickers_path)   
-    # select_images(potential_stickers_path)
-    # check_progress(ammount_of_images)  
-    # os.startfile(audio_path)      
-    # remove_images(old_images)
-    # print("Size of old directory:", size_of_directory/1000000, "MB")
-    # print("Size of new directory:", get_directory_size(potential_stickers_path)/1000000, "MB")
-    
-    # # Beginning of cartoonification process
-    # image_files = get_images(potential_stickers_path)
-    # driver = setup_driver(cartoon_website)
-    # wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-    # automation_loop(image_files, driver, wait)
-    # os.startfile(r'C:\Users\harry\Desktop\Stickers\Scripts\Oven-Timer-Ding.mp3')      
+def rename_images(directory):
+    index = 0 
+    for image in os.listdir(directory):
+        index += 1
+        if image.endswith(".jpg"):
+            os.rename(os.path.join(directory, image), os.path.join(directory, "image_" + str(index) + ".jpg"))
 
-    # open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
-    #                     "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
-    #                      "\n.... Understood?")
-    picture_picker(potential_stickers_path)
-    move_to_current_directory(potential_stickers_path)
-    remove_empty_folders(potential_stickers_path)
+def main():
+    move_zip_to_directory()
+    unzip_folder()
+    if not validate_directory(potential_stickers_path):
+        exit(1)
+    rename_images(potential_stickers_path)
+    run_application(quality_scaler_path)
+    enter_parameters()
+    ammount_of_images = len(os.listdir(potential_stickers_path)) 
+    select_images(potential_stickers_path)
+    check_progress(ammount_of_images)
+    check_threads_done()
+    os.startfile(audio_path)      
+    open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
+                        "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
+                         "\n.... Understood?")
+    picture_picker(cartoonified_images_path)
+    move_to_current_directory(cartoonified_images_path)
+    remove_empty_folders(cartoonified_images_path)
     print("Finished!")
-    subprocess.Popen(f'explorer {potential_stickers_path}')
+    subprocess.Popen(f'explorer {cartoonified_images_path}')
+
 
 main()
+
+

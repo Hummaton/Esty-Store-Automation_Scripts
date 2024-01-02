@@ -348,6 +348,7 @@ def main():
         move_to_current_directory(source_path)
         remove_empty_folders(source_path)
         print("Finished!")
+        
         subprocess.Popen(f'explorer {source_path}')
 
 main()
