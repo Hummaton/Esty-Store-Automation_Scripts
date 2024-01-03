@@ -40,7 +40,7 @@ def move_zip_to_directory():
 
     if os.path.exists(source_zip_path):
         shutil.move(source_zip_path, destination_folder_path)
-        print(f"Moved '{zip_filename}' to '{destination_folder_path}'")
+        # print(f"Moved '{zip_filename}' to '{destination_folder_path}'")
         return True 
     else:
         print(f"'{zip_filename}' not found in Downloads directory.")
@@ -201,17 +201,16 @@ def cartoonify_image(image):
     # Creating a folder with the file name in the destination directory
     folder_dst_path = os.path.join(cartoonified_images_path, folder_dst_name)
     os.makedirs(folder_dst_path, exist_ok=True)
-    print("\nCreated folder to store " + image + " and cartoonified versions into " + folder_dst_name + "with path " + folder_dst_path)
+    # print("\nCreated folder to store " + image + " and cartoonified versions into " + folder_dst_name + "with path " + folder_dst_path)
 
     # Copying the file to the newly created folder
     shutil.copy(image, folder_dst_path)
-    print("Copied " + image + " to " + folder_dst_path)
+    # print("Copied " + image + " to " + folder_dst_path)
     
     download_directory = folder_dst_path
     website = cartoon_website
 
     driver = setup_driver(download_directory, website)
-
     wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
 
 
@@ -221,7 +220,15 @@ def cartoonify_image(image):
         send_cartoonify(driver, edge_intensity_value, image, folder_dst_path)
         #print("Waiting for webpage to load...")
         time.sleep(5)
-        assert_finished(wait, "Download processed image")
+        successful_download = assert_finished(wait, "Download processed image")
+        while not successful_download:
+            print("Failed to download" + image + " with Edge Intensity " + str(edge_intensity_value) + ". Retrying...")
+            driver.quit()
+            driver = setup_driver(download_directory, website)
+            wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+            send_cartoonify(driver, edge_intensity_value, image, folder_dst_path)
+            time.sleep(5)
+            successful_download = assert_finished(wait, "Download processed image")
         driver.get(cartoon_website)
         time.sleep(8)
         rename_downloaded_file(edge_intensity_value, folder_dst_path)
@@ -304,12 +311,15 @@ def assert_finished(wait, element):
         download_button = wait.until(EC.presence_of_element_located((By.XPATH, f'//a[b[text()="{element}"]]')))
     except TimeoutException as e:
         print(f"Timeout occurred: {e}")
-        exit(1)
+        print("\nRetrying...")
+        return False
     except Exception as e:
         print(f"An error occurred: {e}")
-        exit(1)
-
+        print("\nRetrying...")
+        return False
+    
     download_button.click()
+    return True
 
 def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
     try:
@@ -486,10 +496,6 @@ def validate_empty_directory(directory):
             print("Invalid input")
             validate_empty_directory(directory)    
 
-
-
-
-
 def main():
     validate_empty_directory(potential_stickers_path)
     validate_empty_directory(enhancedImages_path)   
@@ -506,6 +512,7 @@ def main():
     check_progress(ammount_of_images)
     check_threads_done()
     os.startfile(audio_path)      
+    time.sleep(3)
     open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
                         "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
                          "\n.... Understood?")
