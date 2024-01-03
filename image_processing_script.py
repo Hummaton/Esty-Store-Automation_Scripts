@@ -7,7 +7,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import tkinter as tk
 from tkinter import filedialog
-import glob
 import subprocess
 import webbrowser
 import shutil
@@ -21,8 +20,8 @@ import threading
 
 edge_intensity_max = 70
 edge_intensity_min = 20
-edge_intensity_increment = 15
-maximum_threads = 8
+edge_intensity_increment = 10
+maximum_threads = 2
 
 picture_extensions = (".jpg", ".jpeg", ".png", "avif")
 downloads_path = r'C:\Users\harry\Downloads'  # Update with your Downloads directory path
@@ -115,6 +114,8 @@ def enter_parameters():
     pyautogui.hotkey('win', 'right')  # Move the window to the right side of the screen
     time.sleep(1)  # Wait for 1 second
 
+    pyautogui.click(1868, 48) #clicks on "clean" button in case images are preloaded 
+
     pyautogui.click(1171, 719)
     pyautogui.click(1127, 867) #change AI model to SAFMNLx4_Real
 
@@ -143,7 +144,7 @@ def enter_parameters():
     pyautogui.click(1458, 384)  # Click on the select button
     
 def select_images(potential_stickers_path):
-    time.sleep(2)  # Wait for the file explorer tab to open
+    time.sleep(1)  # Wait for the file explorer tab to open
     pyautogui.typewrite(potential_stickers_path)  # Type the path to the directory
     pyautogui.press('enter')  # Press enter to confirm the path
     pyautogui.click(1546, 677)  # Click on center of the window
@@ -167,8 +168,7 @@ def check_progress(ammount_of_images):
         if ammount_of_images != len(os.listdir(potential_stickers_path)):
             move_newest_image(potential_stickers_path, enhancedImages_path)
             images_enhanced = len(os.listdir(enhancedImages_path))
-            images_remaining = ammount_of_images - images_enhanced
-            print("Enhanced", images_enhanced, "images so far..." + str(images_remaining) + " images remaining")
+            print("Enhanced", images_enhanced, "images so far..." + str(ammount_of_images - images_enhanced) + " images remaining")
             
             # Retrieve the newest file from enhancedImages_path
             files = [os.path.join(enhancedImages_path, f) for f in os.listdir(enhancedImages_path) if os.path.isfile(os.path.join(enhancedImages_path, f))]
@@ -193,7 +193,7 @@ def check_progress(ammount_of_images):
                 current_image_being_cartoonified += 1
 
         if ammount_of_images == images_enhanced != current_image_being_cartoonified:
-            if current_threads < maximum_threads and (current_image_being_cartoonified != ammount_of_images):
+            if current_threads < maximum_threads:
                 parallel_cartoonify(newest_files[current_image_being_cartoonified], folder_dst_name, folder_dst_path)       
                 current_image_being_cartoonified += 1
 
@@ -217,10 +217,18 @@ def parallel_cartoonify(newest_file, folder_dst_name, folder_dst_path):
         threading.Thread(target=cartoonify_image, args=(newest_file, inner_folder_path, edge_intensity_value, wait_index)).start() # Check directory size every 3 seconds
 
 def move_newest_image(source_folder, destination_folder):
+    time.sleep(5)
     files = [os.path.join(source_folder, f) for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
     newest_image = max(files, key=os.path.getmtime, default=None)
-    shutil.move(newest_image, destination_folder)
-    # print(f"Moved {newest_image} to {destination_folder}")
+    try:
+        shutil.move(newest_image, destination_folder)
+        print(f"Moved {newest_image} to {destination_folder}")
+        #print(f"Moved {newest_image} to {destination_folder}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Retrying...\n\n")
+        time.sleep(1)
+        move_newest_image(source_folder, destination_folder)
    
 def check_threads_done():
     while threading.active_count() > 1:
@@ -254,31 +262,6 @@ def setup_driver(download_directory, website):
     driver.get(website)
     return driver           
 
-def get_images(directory):
-    global potential_stickers_path
-    if not validate_directory(directory):
-        potential_stickers_path = get_valid_directory()
-
-    # List all files in the source directory
-    files = os.listdir(directory)
-
-    # Filter image files
-    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
-    
-    print("Images to cartoonify from path '" + potential_stickers_path + "'")
-    for image_file in image_files:
-        print(image_file)
-
-    return image_files
-
-def get_directory_size(directory):
-    total = 0
-    for path, dirs, files in os.walk(directory):
-        for f in files:
-            fp = os.path.join(path, f)
-            total += os.path.getsize(fp)
-    return total
-
 def rename_downloaded_file(edge_intensity_value, folder_dst_path):
     try:
         # Find the newest downloaded file in the downloads folder
@@ -286,7 +269,7 @@ def rename_downloaded_file(edge_intensity_value, folder_dst_path):
         latest_file = max(files, key=os.path.getmtime, default=None)
         
         if latest_file.lower().endswith(('.jpg', '.jpeg')):
-            new_file_name = f"EdgeIntensity_{edge_intensity_value}_{os.path.basename(latest_file)}"
+            new_file_name = f"EdgeIntensity_{edge_intensity_value}.jpg"
             new_file_path = os.path.join(folder_dst_path, new_file_name)
             os.rename(latest_file, new_file_path)
 
@@ -438,7 +421,6 @@ def remove_empty_folders(directory):
                 os.rmdir(folder_path)
     # print("Removed empty folders")
 
-
 def validate_empty_directory(directory):
     if os.listdir(directory):
         print("Working directory " + directory + " is not empty. Would you like to empty it? (Y/N)")
@@ -452,21 +434,28 @@ def validate_empty_directory(directory):
                     shutil.rmtree(item_path)
             print("Directory emptied")
         elif user_input == "n":
-            print("Exiting...")
-            subprocess.Popen(['explorer', directory])
-            exit(0)
+            print("Continuing...")
         else:
             print("Invalid input")
             validate_empty_directory(directory)
 
+def rename_images(directory):   
+    image_index = 0
+    for filename in os.listdir(directory):
+        if filename.endswith(".jpg"):
+            image_index += 1
+            os.rename(os.path.join(directory, filename), os.path.join(directory, "image" + str(image_index) + ".jpeg"))
+            # print("Renamed " + filename + " to " + filename + ".jpeg")    
 
 def main():
+    validate_empty_directory(potential_stickers_path)
     validate_empty_directory(cartoonified_images_path)
     validate_empty_directory(enhancedImages_path)
     move_zip_to_directory()
     unzip_folder()
     if not validate_directory(potential_stickers_path):
         exit(1)
+    rename_images(potential_stickers_path)
     run_application(quality_scaler_path)
     enter_parameters()
     ammount_of_images = len(os.listdir(potential_stickers_path)) 
