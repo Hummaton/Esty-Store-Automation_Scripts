@@ -20,8 +20,9 @@ import keyboard
 import threading
 
 edge_intensity_max = 70
-edge_intensity_min = 10
-edge_intensity_increment = 10
+edge_intensity_min = 20
+edge_intensity_increment = 15
+maximum_threads = 8
 
 picture_extensions = (".jpg", ".jpeg", ".png", "avif")
 downloads_path = r'C:\Users\harry\Downloads'  # Update with your Downloads directory path
@@ -99,13 +100,6 @@ def validate_directory(path):
 
     return True
 
-def rename_images(directory):
-    index = 0 
-    for image in os.listdir(directory):
-        index += 1
-        if image.endswith(".jpg"):
-            os.rename(os.path.join(directory, image), os.path.join(directory, "image_" + str(index) + ".jpg"))
-
 def run_application(application_path):
     if os.path.exists(application_path):
         webbrowser.open(application_path)
@@ -162,22 +156,27 @@ def select_images(potential_stickers_path):
 def check_progress(ammount_of_images):
     wait_time = 0
     print("waiting for processing to complete...")
+    newest_files = []  # Create an empty list to store newest files
+    current_image_being_cartoonified = 0
 
     while True:
         images_enhanced = len(os.listdir(enhancedImages_path))
         wait_time += 3
+        current_threads = threading.active_count()
+
         if ammount_of_images != len(os.listdir(potential_stickers_path)):
             move_newest_image(potential_stickers_path, enhancedImages_path)
             images_enhanced = len(os.listdir(enhancedImages_path))
             images_remaining = ammount_of_images - images_enhanced
-            print("Enhanced", images_enhanced, "images so far... \n" 
-                  + str(images_remaining) + " images remaining")
+            print("Enhanced", images_enhanced, "images so far..." + str(images_remaining) + " images remaining")
             
             # Retrieve the newest file from enhancedImages_path
             files = [os.path.join(enhancedImages_path, f) for f in os.listdir(enhancedImages_path) if os.path.isfile(os.path.join(enhancedImages_path, f))]
             newest_file = max(files, key=os.path.getmtime, default=None)
-
+            newest_files.append(newest_file)  # Add the newest file to the list
+            
             # Run cartoonify_image in the background
+
             # Extracting the filename without extension
             folder_dst_name = os.path.splitext(os.path.basename(newest_file))[0]
             folder_dst_path = os.path.join(cartoonified_images_path, folder_dst_name)
@@ -186,34 +185,47 @@ def check_progress(ammount_of_images):
 
             # Copying the file to the newly created folder
             shutil.copy(newest_file, folder_dst_path)
-            print("Copied " + newest_file + " to " + folder_dst_path)
-            print("Beginning cartoonization for " + newest_file)
-            wait_index = 0
-            for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
-                inner_folder_name = f"EdgeIntensity_{edge_intensity_value}" + folder_dst_name
-                inner_folder_path = os.path.join(folder_dst_path, inner_folder_name)
-                os.makedirs(inner_folder_path, exist_ok=True)
-                wait_index += 4
-                threading.Thread(target=cartoonify_image, args=(newest_file, inner_folder_path, edge_intensity_value, wait_index)).start()
-                time.sleep(1)
+            # print("Copied " + newest_file + " to " + folder_dst_path)
 
-        if ammount_of_images == images_enhanced:
-            print("Enhancement complete! Total wait time was", wait_time, "seconds")
+            if current_threads < maximum_threads:
+                print("Current image being cartoonified: " + str(current_image_being_cartoonified))
+                parallel_cartoonify(newest_files[current_image_being_cartoonified], folder_dst_name, folder_dst_path)   
+                current_image_being_cartoonified += 1
+
+        if ammount_of_images == images_enhanced != current_image_being_cartoonified:
+            if current_threads < maximum_threads and (current_image_being_cartoonified != ammount_of_images):
+                parallel_cartoonify(newest_files[current_image_being_cartoonified], folder_dst_name, folder_dst_path)       
+                current_image_being_cartoonified += 1
+
+
+        if ammount_of_images == images_enhanced == current_image_being_cartoonified: 
+            check_threads_done()
+            print("\nProcessing complete! Total wait time was", wait_time, "seconds")
             break
-        
-        time.sleep(3)  # Check directory size every 3 seconds
+            
+
+        time.sleep(3) 
+
+def parallel_cartoonify(newest_file, folder_dst_name, folder_dst_path):
+    print("Beginning cartoonization for " + os.path.splitext(os.path.basename(newest_file))[0])
+    wait_index = 0
+    for edge_intensity_value in range(edge_intensity_min, edge_intensity_max + 1, edge_intensity_increment):
+        inner_folder_name = f"EdgeIntensity_{edge_intensity_value}" + folder_dst_name
+        inner_folder_path = os.path.join(folder_dst_path, inner_folder_name)
+        os.makedirs(inner_folder_path, exist_ok=True)
+        wait_index += 4
+        threading.Thread(target=cartoonify_image, args=(newest_file, inner_folder_path, edge_intensity_value, wait_index)).start() # Check directory size every 3 seconds
 
 def move_newest_image(source_folder, destination_folder):
     files = [os.path.join(source_folder, f) for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
     newest_image = max(files, key=os.path.getmtime, default=None)
     shutil.move(newest_image, destination_folder)
-    print(f"Moved {newest_image} to {destination_folder}")
+    # print(f"Moved {newest_image} to {destination_folder}")
    
 def check_threads_done():
     while threading.active_count() > 1:
         pass
-    print("All processes are done running")
-     
+
 def cartoonify_image(image, folder_dst_path, edge_intensity_value,variable_wait_time):
     download_directory = folder_dst_path
     website = cartoon_website
@@ -224,13 +236,14 @@ def cartoonify_image(image, folder_dst_path, edge_intensity_value,variable_wait_
     send_cartoonify(driver, edge_intensity_value, image, folder_dst_path)
     #print("Waiting for webpage to load...")
     time.sleep(5)
-    assert_finished(wait, "Download processed image")
-    driver.get(cartoon_website)
-    time.sleep(8)
-    rename_downloaded_file(edge_intensity_value, folder_dst_path)
-
+    if not assert_finished(wait, "Download processed image"):
+        driver.quit()
+        cartoonify_image(image, folder_dst_path, edge_intensity_value,variable_wait_time)
+    time.sleep(5)
+    rename_downloaded_file(edge_intensity_value, download_directory)
     # Close the browser after cartoonifying the image
-    print("Finished cartoonifying ", image)
+    image_name = os.path.splitext(os.path.basename(image))
+    print("Finished cartoonifying", image_name, "with Edge Intensity", edge_intensity_value)
     driver.quit() 
 
 def setup_driver(download_directory, website):
@@ -269,20 +282,14 @@ def get_directory_size(directory):
 def rename_downloaded_file(edge_intensity_value, folder_dst_path):
     try:
         # Find the newest downloaded file in the downloads folder
-        list_of_files = glob.glob(os.path.join(folder_dst_path, "*"))
-        latest_file = max(list_of_files, key=os.path.getctime)
-        # Check if the latest downloaded file matches the regex pattern
-        regex_pattern = r'imgonline-com-ua-CartoonPicture.*\.jpg'
-        if re.match(regex_pattern, os.path.basename(latest_file)):
-            # Rename the latest downloaded file to include edge intensity prefix
+        files = [os.path.join(folder_dst_path, f) for f in os.listdir(folder_dst_path) if os.path.isfile(os.path.join(folder_dst_path, f))]
+        latest_file = max(files, key=os.path.getmtime, default=None)
+        
+        if latest_file.lower().endswith(('.jpg', '.jpeg')):
             new_file_name = f"EdgeIntensity_{edge_intensity_value}_{os.path.basename(latest_file)}"
             new_file_path = os.path.join(folder_dst_path, new_file_name)
             os.rename(latest_file, new_file_path)
-        else:
-            print("Downloaded file doesn't match the expected pattern or does not exist")
-            time.sleep(3)
-            print("Retrying...")
-            rename_downloaded_file(edge_intensity_value, folder_dst_path)
+
     except Exception as e:
         print(f"An error occurred: {e}")
         print("Retrying...")
@@ -296,12 +303,13 @@ def assert_finished(wait, element):
         download_button = wait.until(EC.presence_of_element_located((By.XPATH, f'//a[b[text()="{element}"]]')))
     except TimeoutException as e:
         print(f"Timeout occurred: {e}")
-        exit(1)
+        return False
     except Exception as e:
         print(f"An error occurred: {e}")
-        exit(1)
-
+        return False
+    
     download_button.click()
+    return True
 
 def send_cartoonify(driver, edge_intensity_value, image_file, image_path):
     try:
@@ -378,7 +386,7 @@ def keep(filename, folder_path):
     for file in os.listdir(folder_path):
         if file != filename:
             os.remove(os.path.join(folder_path, file))
-            print("Removed " + file)
+            # print("Removed " + file)
     print("\n")
 
 def check_for_match(folder_path, pattern):   
@@ -420,7 +428,7 @@ def move_to_current_directory(directory):
                 new_sub_item_path = os.path.join(directory, sub_item)
                 # Move the sub-item to the directory one level below
                 shutil.move(sub_item_path, new_sub_item_path)
-    print("Moved all files to current directory")
+    # print("Moved all files to current directory")
     
 def remove_empty_folders(directory):
     for folder in os.listdir(directory):
@@ -428,17 +436,20 @@ def remove_empty_folders(directory):
         if os.path.isdir(folder_path):
             if not os.listdir(folder_path):
                 os.rmdir(folder_path)
-    print("Removed empty folders")
+    # print("Removed empty folders")
+
 
 def validate_empty_directory(directory):
     if os.listdir(directory):
         print("Working directory " + directory + " is not empty. Would you like to empty it? (Y/N)")
         user_input = input().lower()
         if user_input == "y":
-            for file in os.listdir(directory):
-                file_path = os.path.join(directory, file)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
+            for item in os.listdir(directory):
+                item_path = os.path.join(directory, item)
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
             print("Directory emptied")
         elif user_input == "n":
             print("Exiting...")
@@ -456,13 +467,11 @@ def main():
     unzip_folder()
     if not validate_directory(potential_stickers_path):
         exit(1)
-    rename_images(potential_stickers_path)
     run_application(quality_scaler_path)
     enter_parameters()
     ammount_of_images = len(os.listdir(potential_stickers_path)) 
     select_images(potential_stickers_path)
     check_progress(ammount_of_images)
-    check_threads_done()
     for folder in os.listdir(cartoonified_images_path):        
         folder_path = os.path.join(cartoonified_images_path, folder)
         move_to_current_directory(folder_path)
@@ -474,11 +483,9 @@ def main():
     picture_picker(cartoonified_images_path)
     move_to_current_directory(cartoonified_images_path)
     remove_empty_folders(cartoonified_images_path)
-    print("Finished!")
     subprocess.Popen(f'explorer {cartoonified_images_path}')
+    print("Finished!")
     
-
-
 main()
 
 
