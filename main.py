@@ -106,11 +106,12 @@ def run_application(application_path):
 
 def enter_parameters():
     pyautogui.hotkey('win', 'd')  # Minimize all windows    
-    time.sleep(10)  # Wait for 10 seconds
+    time.sleep(15)  # Wait for 10 seconds
     pyautogui.click(492, 268)  
     pyautogui.hotkey('win', 'right')  # Move the window to the right side of the screen
     time.sleep(1)  # Wait for 1 second
 
+    pyautogui.click(1881, 52)
     pyautogui.click(1171, 719)
     pyautogui.click(1127, 867) #change AI model to SAFMNLx4_Real
 
@@ -159,6 +160,7 @@ def check_progress(ammount_of_images):
         images_enhanced = len(os.listdir(enhancedImages_path))
         wait_time += 3
         if ammount_of_images != len(os.listdir(potential_stickers_path)):
+            time.sleep(2)
             move_newest_image(potential_stickers_path, enhancedImages_path)
             images_enhanced = len(os.listdir(enhancedImages_path))
             images_remaining = ammount_of_images - images_enhanced
@@ -183,6 +185,12 @@ def check_progress(ammount_of_images):
 def move_newest_image(source_folder, destination_folder):
     files = [os.path.join(source_folder, f) for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
     newest_image = max(files, key=os.path.getmtime, default=None)
+    
+    while not newest_image.endswith(".jpg"):
+        time.sleep(1)
+        files = [os.path.join(source_folder, f) for f in os.listdir(source_folder) if os.path.isfile(os.path.join(source_folder, f))]
+        newest_image = max(files, key=os.path.getmtime, default=None)
+    
     shutil.move(newest_image, destination_folder)
     print(f"Moved {newest_image} to {destination_folder}")
    
@@ -476,7 +484,10 @@ def rename_images(directory):
     for image in os.listdir(directory):
         index += 1
         if image.endswith(".jpg"):
-            os.rename(os.path.join(directory, image), os.path.join(directory, "image_" + str(index) + ".jpg"))
+            new_name = "image_" + str(index) + ".jpg"
+            new_path = os.path.join(directory, new_name)
+            if not os.path.exists(new_path):
+                os.rename(os.path.join(directory, image), new_path)
 
 def validate_empty_directory(directory):
     if os.listdir(directory):
@@ -500,19 +511,23 @@ def main():
     validate_empty_directory(potential_stickers_path)
     validate_empty_directory(enhancedImages_path)   
     validate_empty_directory(cartoonified_images_path)
+
     move_zip_to_directory()
     unzip_folder()
     if not validate_directory(potential_stickers_path):
         exit(1)
+
     rename_images(potential_stickers_path)
     run_application(quality_scaler_path)
     enter_parameters()
     ammount_of_images = len(os.listdir(potential_stickers_path)) 
     select_images(potential_stickers_path)
+
     check_progress(ammount_of_images)
     check_threads_done()
     os.startfile(audio_path)      
     time.sleep(3)
+
     open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
                         "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
                          "\n.... Understood?")
@@ -520,6 +535,7 @@ def main():
     move_to_current_directory(cartoonified_images_path)
     remove_empty_folders(cartoonified_images_path)
     print("Finished!")
+    
     subprocess.Popen(f'explorer {cartoonified_images_path}')
 
 
