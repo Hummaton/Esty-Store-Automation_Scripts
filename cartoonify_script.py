@@ -3,8 +3,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC  
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-import tkinter as tk
-from tkinter import filedialog
 import glob
 import os
 import subprocess
@@ -18,14 +16,14 @@ import zipfile
 import keyboard
 
 # Replace with your folder path containing your images
-source_path = r'C:\Users\harry\Desktop\Stickers\Potential_Stickers'
+source_path = r'/Users/harjotgill/Documents/Sticker-Repo-/processing_directory/Potential_Stickers'
 # Replace with your downloads folder path
-download_path = r'C:\Users\harry\Downloads'
+download_path = r'/Users/harjotgill/Downloads'
 cartoon_website ='https://www.imgonline.com.ua/eng/cartoon-picture.php'
 edge_intensity_max = 60
 edge_intensity_min = 10
 edge_intensity_increment = 10
-zip_filename = 'potential stickers.zip'
+zip_filename = 'potential stickers-001.zip'
 
 # Set up browser options for download preferences
 options = webdriver.ChromeOptions()
@@ -102,12 +100,13 @@ def get_images(directory):
     global source_path
     if not check_directory(directory):
         source_path = get_valid_directory()
+        directory = source_path
 
     # List all files in the source directory
     files = os.listdir(directory)
 
     # Filter image files
-    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+    image_files = [f for f in files]
     
     print("Images to cartoonify from path '" + source_path + "'")
     for image_file in image_files:
@@ -208,18 +207,16 @@ def get_valid_directory():
     continue_request = input("Continue? Enter (Y/N): ").lower()
 
     if continue_request == "y":
-        print("Please select the folder containing your pictures")
-        root = tk.Tk()
-        root.withdraw()  # Hide the main window
-        new_path = filedialog.askdirectory()
-        if new_path:  # If a directory is selected
+        print("Please enter the path to the folder containing your pictures")
+        new_path = input("Path: ")
+        if new_path:  # If a directory is provided
             if check_directory(new_path):
                 return new_path
             else:
                 print("Invalid directory!")
                 return get_valid_directory()
         else:
-            print("No directory selected!")
+            print("No directory provided!")
             return get_valid_directory()
     else:
         print("Adios!")
@@ -237,7 +234,7 @@ def check_directory(path):
     # Get all files in the directory
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
 
-    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+    image_files = [f for f in files if f.endswith(('.jpg', '.jpeg', '.PNG', '.gif'))]
 
     if not image_files:
         print("The directory does not contain any image files.")
@@ -263,7 +260,7 @@ def picture_picker(directory):
         folder_path = os.path.join(directory, folder)
 
         if os.path.isdir(folder_path):
-            subprocess.Popen(f'explorer {folder_path}')
+            subprocess.Popen(['open', folder_path])
             while True:
                 user_input = track_first_two_digits()
                 regex_pattern = r'EdgeIntensity_' + user_input
@@ -334,21 +331,16 @@ def remove_empty_folders(directory):
 def main():
     move_zip_to_directory()
     unzip_folder()
-    if (get_valid_directory(source_path)):
-        image_files = get_images(source_path)
-        driver = setup_driver(cartoon_website)
-        wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-        automation_loop(image_files, driver, wait)
-        os.startfile(r'C:\Users\harry\Desktop\Stickers\Scripts\Oven-Timer-Ding.mp3')      
-
-        open_popup_windows("When each folder opens on screen,\n please type the edge intensity value you want to keep for that folder.\n" +
-                            "If you want to keep the image with Edge Intensity with 20,\n simply type '20' on your keyboard and it will move onto the next folder" +
-                            "\n.... Understood?")
-        picture_picker(source_path)
-        move_to_current_directory(source_path)
-        remove_empty_folders(source_path)
-        print("Finished!")
-        
-        subprocess.Popen(f'explorer {source_path}')
+    image_files = get_images(source_path)
+    driver = setup_driver(cartoon_website)
+    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+    automation_loop(image_files, driver, wait)
+    # picture_picker(source_path)
+    # move_to_current_directory(source_path)
+    # remove_empty_folders(source_path)
+    
+    print("Finished!")
+    
+    # subprocess.Popen(f'explorer {source_path}')
 
 main()
