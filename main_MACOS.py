@@ -13,14 +13,14 @@ import time
 import pygetwindow as gw
 import re
 import zipfile
-import keyboard
+import pygame
 
 # Replace with your folder path containing your images
 source_path = r'/Users/harjotgill/Documents/Sticker-Repo-/processing_directory/Potential_Stickers'
 # Replace with your downloads folder path
 download_path = r'/Users/harjotgill/Downloads'
 cartoon_website ='https://www.imgonline.com.ua/eng/cartoon-picture.php'
-edge_intensity_max = 60
+edge_intensity_max = 30
 edge_intensity_min = 10
 edge_intensity_increment = 10
 zip_filename = 'potential stickers-001.zip'
@@ -265,19 +265,29 @@ def check_directory(path):
 def picture_picker(directory):
     for folder in os.listdir(directory):
         folder_path = os.path.join(directory, folder)
-
         if os.path.isdir(folder_path):
-            subprocess.Popen(['open', folder_path])
-            while True:
-                user_input = input("Enter the edge intensity value to keep for images in " + folder + ": ")
-                regex_pattern = r'EdgeIntensity_' + user_input
-                match, matching_filename = check_for_match(folder_path, regex_pattern)
-                if match:
-                    keep(matching_filename, folder_path)
-                    break
-                else:
-                    print("No match found")
-                    continue
+            # Select all images in the folder and open them together
+            image_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+            
+            if image_files:
+                subprocess.Popen(['open'] + image_files)
+                while True:
+                    user_input = input("Enter the edge intensity value to keep for images in " + folder + ": ")
+                    regex_pattern = r'EdgeIntensity_' + user_input
+                    match, matching_filename = check_for_match(folder_path, regex_pattern)
+                    if match:
+                        for image_file in image_files:
+                            subprocess.call(["osascript", "-e", 'tell application "Preview" to close windows'])
+                        keep(matching_filename, folder_path)
+                        break
+                    else:
+                        print("No match found")
+                        continue
+                    
+            else:
+                print(f"No images found in folder {folder}")
+        
+           
 
 def keep(filename, folder_path):
     for file in os.listdir(folder_path):
@@ -319,18 +329,53 @@ def remove_empty_folders(directory):
                 os.rmdir(folder_path)
     print("Removed empty folders")
 
+def playSound(sound_file):
+    try:
+        pygame.mixer.init()
+        pygame.mixer.music.load(sound_file)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(1)
+    except ImportError:
+        print("pygame module not found. Please install it using 'pip install pygame'.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+def assert_empty_directory(directory):
+    if not os.listdir(directory):
+        print(f"Directory '{directory}' is empty.")
+    else:
+        print(f"Directory '{directory}' is not empty. Would you like to clear it?")
+        user_input = input("Enter (Y/N): ").lower()
+        if user_input == "y":
+            for item in os.listdir(directory):
+                item_path = os.path.join(directory, item)
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
+            print(f"Cleared '{directory}'")
+        else:
+            print("Exiting and opening in Finder...")
+            subprocess.Popen(['open', directory])
+            exit(0)
+
 def main():
-    move_zip_to_directory()
-    unzip_folder()
-    image_files = get_images(source_path)
-    driver = setup_driver(cartoon_website)
-    wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
-    automation_loop(image_files, driver, wait)
+    # assert_empty_directory(source_path)
+    # move_zip_to_directory()
+    # unzip_folder()
+    # image_files = get_images(source_path)
+    # driver = setup_driver(cartoon_website)
+    # wait = WebDriverWait(driver, 10)  # Initialize WebDriverWait object
+    # automation_loop(image_files, driver, wait)
+    playSound("Oven-Timer-Ding.mp3")
     picture_picker(source_path)
     move_to_current_directory(source_path)
     remove_empty_folders(source_path)
-    
     print("Finished!")
+
+
+
     
     # subprocess.Popen(f'explorer {source_path}')
 
